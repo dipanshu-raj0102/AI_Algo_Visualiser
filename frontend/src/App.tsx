@@ -5,7 +5,8 @@ import { AlgorithmsPage } from "./pages/AlgorithmsPage";
 import { AlgorithmDetailPage } from "./pages/AlgorithmDetailPage";
 import { VisualizerPage } from "./pages/VisualizerPage";
 import { AboutPage, ComparisonPage, DashboardPage, LearnPage } from "./pages/StaticPages";
+import { HeuristicComparisonPage } from "./features/heuristic-comparison/HeuristicComparisonPage";
 
 export default function App() {
-  return <BrowserRouter><Layout><Routes><Route path="/" element={<LandingPage />} /><Route path="/algorithms" element={<AlgorithmsPage />} /><Route path="/algorithms/:algorithmId" element={<AlgorithmDetailPage />} /><Route path="/visualizer/:algorithmId" element={<VisualizerPage />} /><Route path="/comparison" element={<ComparisonPage />} /><Route path="/learn" element={<LearnPage />} /><Route path="/dashboard" element={<DashboardPage />} /><Route path="/about" element={<AboutPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Layout></BrowserRouter>;
+  return <BrowserRouter><Layout><Routes><Route path="/" element={<LandingPage />} /><Route path="/algorithms" element={<AlgorithmsPage />} /><Route path="/algorithms/:algorithmId" element={<AlgorithmDetailPage />} /><Route path="/visualizer/:algorithmId" element={<VisualizerPage />} /><Route path="/compare/astar-heuristics" element={<HeuristicComparisonPage />} /><Route path="/comparison" element={<ComparisonPage />} /><Route path="/learn" element={<LearnPage />} /><Route path="/dashboard" element={<DashboardPage />} /><Route path="/about" element={<AboutPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Layout></BrowserRouter>;
 }

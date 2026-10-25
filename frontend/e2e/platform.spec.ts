@@ -19,3 +19,23 @@ test("visualizer exposes playback controls", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /Watch the search frontier/i })).toContainText("Watch the search frontier");
   await expect(page.getByRole("button", { name: /Run astar-grid/i })).toContainText("Run astar-grid");
 });
+
+test("A* heuristic comparison runs four synchronized traces", async ({ page }) => {
+  await page.goto("/compare/astar-heuristics");
+  await expect(page.getByRole("heading", { name: /Same map\. Four ways/i })).toContainText("Same map");
+  await expect(page.getByRole("button", { name: "Run comparison" })).toBeVisible();
+  await page.getByRole("button", { name: "Run comparison" }).click();
+  await expect(page.getByRole("heading", { name: "Manhattan" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "Euclidean" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Chebyshev" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Zero / Dijkstra" })).toBeVisible();
+  const progress = page.getByRole("progressbar");
+  await expect(progress).toHaveAttribute("aria-valuenow", "0");
+  await page.getByRole("button", { name: /Resume comparison/i }).click();
+  await page.waitForTimeout(450);
+  await expect(progress).toHaveAttribute("aria-valuenow", /[1-9][0-9]?/);
+  await page.getByRole("button", { name: /Pause comparison/i }).click();
+  await page.getByRole("button", { name: "Fast-forward comparison" }).click();
+  await page.getByRole("button", { name: "Restart comparison" }).click();
+  await expect(progress).toHaveAttribute("aria-valuenow", "0");
+});

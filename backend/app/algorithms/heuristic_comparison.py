@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Literal, cast
 
 from pydantic import BaseModel, Field, field_validator
 
-from .astar_grid import AStarGridConfig, AStarGridEngine
+from .astar_grid import HEURISTIC_DEFINITIONS, AStarGridConfig, AStarGridEngine, generate_obstacles
 from .base import AlgorithmEngine, AlgorithmEvent, AlgorithmResult
 
 
@@ -27,11 +29,20 @@ class HeuristicComparisonConfig(BaseModel):
 
 class HeuristicComparisonSummary(BaseModel):
     heuristic: HeuristicName
+    heuristic_formula: str
+    heuristic_description: str
     status: str
     path_cost: int | float | None
     path_length: int
     nodes_expanded: int
     nodes_generated: int
+    expanded: int
+    discovered: int
+    max_frontier: int
+    explored_cells: int
+    execution_time: float
+    reached: bool
+    steps: int
     event_count: int
 
 
@@ -40,7 +51,31 @@ class HeuristicComparisonEngine(AlgorithmEngine[HeuristicComparisonConfig]):
 
     algorithm_id = "astar-heuristic-comparison"
 
+    def _shared_grid(self) -> AStarGridConfig:
+        """Materialize one problem once; every heuristic receives this exact config."""
+        grid = self.config.grid
+        obstacles = grid.obstacles or generate_obstacles(grid)
+        return grid.model_copy(update={"obstacles": sorted(set(obstacles))})
+
+    @staticmethod
+    def _problem_metadata(grid: AStarGridConfig) -> dict[str, object]:
+        payload = {
+            "rows": grid.rows,
+            "cols": grid.cols,
+            "start": grid.start,
+            "goal": grid.goal,
+            "obstacles": sorted(grid.obstacles),
+            "obstacle_density": grid.obstacle_density,
+            "movement_model": grid.movement_model,
+            "seed": grid.seed,
+        }
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        return {"signature": hashlib.sha256(encoded).hexdigest()[:16], **payload}
+
     def run(self) -> AlgorithmResult:
+        self.reset()
+        shared_grid = self._shared_grid()
+        problem = self._problem_metadata(shared_grid)
         summaries: list[HeuristicComparisonSummary] = []
         runs: list[dict[str, object]] = []
         paths: list[list[str]] = []
@@ -51,36 +86,58 @@ class HeuristicComparisonEngine(AlgorithmEngine[HeuristicComparisonConfig]):
                 current_node=self.config.grid.start,
                 metadata={
                     "grid": {
-                        "rows": self.config.grid.rows,
-                        "cols": self.config.grid.cols,
-                        "obstacles": sorted(self.config.grid.obstacles),
+                        "rows": shared_grid.rows,
+                        "cols": shared_grid.cols,
+                        "obstacles": sorted(shared_grid.obstacles),
                     },
                     "heuristics": list(self.config.heuristics),
-                    "start": self.config.grid.start,
-                    "goal": self.config.grid.goal,
+                    "start": shared_grid.start,
+                    "goal": shared_grid.goal,
+                    "problem": problem,
                 },
             )
         )
 
         for index, heuristic in enumerate(self.config.heuristics, start=1):
-            run_config = self.config.grid.model_copy(update={"heuristic": heuristic})
+            run_config = shared_grid.model_copy(update={"heuristic": heuristic})
             result = AStarGridEngine(run_config).run()
             final = result.final_state
+            trace = [event.model_dump() for event in result.events]
             path_cost_value = final.metrics.get("path_cost")
             path_cost = path_cost_value if isinstance(path_cost_value, (int, float)) else None
             expanded_value = final.metrics.get("nodes_expanded", 0)
             generated_value = final.metrics.get("nodes_generated", 0)
+            max_frontier_value = final.metrics.get("max_frontier_size", 0)
+            explored_cells_value = final.metrics.get("explored_cells", len(final.explored))
+            execution_time_value = final.metrics.get("execution_time", 0.0)
+            reached_value = final.metrics.get("reached", result.status == "completed")
+            steps_value = final.metrics.get("steps", len(result.events))
             summary = HeuristicComparisonSummary(
                 heuristic=heuristic,
+                heuristic_formula=HEURISTIC_DEFINITIONS[heuristic]["formula"],
+                heuristic_description=HEURISTIC_DEFINITIONS[heuristic]["description"],
                 status=result.status,
                 path_cost=path_cost,
                 path_length=len(final.path),
                 nodes_expanded=int(expanded_value) if isinstance(expanded_value, (int, float)) else 0,
                 nodes_generated=int(generated_value) if isinstance(generated_value, (int, float)) else 0,
+                expanded=int(expanded_value) if isinstance(expanded_value, (int, float)) else 0,
+                discovered=int(generated_value) if isinstance(generated_value, (int, float)) else 0,
+                max_frontier=int(max_frontier_value) if isinstance(max_frontier_value, (int, float)) else 0,
+                explored_cells=int(explored_cells_value) if isinstance(explored_cells_value, (int, float)) else len(final.explored),
+                execution_time=float(execution_time_value) if isinstance(execution_time_value, (int, float)) else 0.0,
+                reached=bool(reached_value),
+                steps=int(steps_value) if isinstance(steps_value, (int, float)) else len(result.events),
                 event_count=len(result.events),
             )
             summaries.append(summary)
-            runs.append(summary.model_dump())
+            runs.append({
+                **summary.model_dump(),
+                "problem": problem,
+                "trace": trace,
+                # `events` is the explicit replay payload used by generic clients.
+                "events": trace,
+            })
             paths.append(list(final.path))
             self.record(
                 AlgorithmEvent(
@@ -96,8 +153,15 @@ class HeuristicComparisonEngine(AlgorithmEngine[HeuristicComparisonConfig]):
                         "nodes_generated": summary.nodes_generated,
                         "path_cost": summary.path_cost,
                         "path_length": summary.path_length,
+                        "expanded": summary.expanded,
+                        "discovered": summary.discovered,
+                        "max_frontier": summary.max_frontier,
+                        "explored_cells": summary.explored_cells,
+                        "execution_time": summary.execution_time,
+                        "reached": summary.reached,
+                        "steps": summary.steps,
                     },
-                    metadata={"heuristic": heuristic, "summary": summary.model_dump()},
+                    metadata={"heuristic": heuristic, "summary": summary.model_dump(), "problem": problem, "trace": trace, "events": trace},
                 )
             )
 
@@ -110,6 +174,7 @@ class HeuristicComparisonEngine(AlgorithmEngine[HeuristicComparisonConfig]):
         final_metrics: dict[str, int | float | str | None] = {
             "runs": len(summaries),
             "completed_runs": len(completed),
+            "reached_runs": sum(1 for summary in summaries if summary.reached),
             "total_nodes_expanded": sum(summary.nodes_expanded for summary in summaries),
             "best_path_cost": best.path_cost if best is not None else None,
         }
@@ -120,7 +185,7 @@ class HeuristicComparisonEngine(AlgorithmEngine[HeuristicComparisonConfig]):
                 current_node=self.config.grid.goal if completed else None,
                 path=paths[best_index] if best is not None else [],
                 metrics=final_metrics,
-                metadata={"runs": runs, "best_heuristic": best.heuristic if best is not None else None},
+                metadata={"runs": runs, "best_heuristic": best.heuristic if best is not None else None, "problem": problem},
             )
         )
         return AlgorithmResult(algorithm_id=self.algorithm_id, status="completed", events=self.events, final_state=self.events[-1])

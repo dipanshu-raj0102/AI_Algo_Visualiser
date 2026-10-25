@@ -7,6 +7,14 @@ from app.algorithms.heuristic_comparison import (
 from app.algorithms.weighted_astar_grid import WeightedAStarGridConfig, WeightedAStarGridEngine, generate_terrain
 
 
+def _without_timing(value):
+    if isinstance(value, dict):
+        return {key: _without_timing(item) for key, item in value.items() if key != "execution_time"}
+    if isinstance(value, list):
+        return [_without_timing(item) for item in value]
+    return value
+
+
 def test_greedy_best_first_reaches_goal_with_deterministic_events():
     config = GreedyBestFirstGridConfig(rows=5, cols=5, start="0,0", goal="4,4", obstacles=["1,1"])
     first = GreedyBestFirstGridEngine(config).run()
@@ -65,4 +73,6 @@ def test_heuristic_comparison_reuses_astar_and_reports_each_run():
     assert first.final_state.metrics["completed_runs"] == 2
     assert first.final_state.metadata["best_heuristic"] in {"manhattan", "euclidean"}
     assert [summary.path_cost for summary in summaries] == [8.0, 8.0]
-    assert [event.model_dump() for event in first.events] == [event.model_dump() for event in second.events]
+    # Search decisions and replay payloads are deterministic; wall-clock timing
+    # is intentionally measured per execution and may vary between runs.
+    assert [_without_timing(event.model_dump()) for event in first.events] == [_without_timing(event.model_dump()) for event in second.events]
