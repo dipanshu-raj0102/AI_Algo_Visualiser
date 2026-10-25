@@ -6,6 +6,7 @@ from itertools import count
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .astar_grid import generate_obstacles as generate_grid_obstacles
 from .astar_grid import node_key, parse_node
 from .base import AlgorithmEngine, AlgorithmEvent, AlgorithmResult
 
@@ -18,14 +19,15 @@ class GreedyBestFirstGridConfig(BaseModel):
     start: str = "1,1"
     goal: str = "12,20"
     obstacles: list[str] = Field(default_factory=list)
+    obstacle_density: float = Field(default=0.18, ge=0, le=0.45)
     heuristic: str = "manhattan"
     seed: int = Field(default=482193, ge=0, le=2_147_483_647)
 
     @field_validator("heuristic")
     @classmethod
     def validate_heuristic(cls, value: str) -> str:
-        if value not in {"manhattan", "euclidean"}:
-            raise ValueError("heuristic must be manhattan or euclidean")
+        if value not in {"manhattan", "euclidean", "chebyshev"}:
+            raise ValueError("heuristic must be manhattan, euclidean, or chebyshev")
         return value
 
     @model_validator(mode="after")
@@ -46,6 +48,11 @@ class GreedyBestFirstGridConfig(BaseModel):
         return self
 
 
+def generate_obstacles(config: GreedyBestFirstGridConfig) -> list[str]:
+    """Generate the same seeded, corridor-preserving obstacle layout as A*."""
+    return generate_grid_obstacles(config)  # type: ignore[arg-type]
+
+
 class GreedyBestFirstGridEngine(AlgorithmEngine[GreedyBestFirstGridConfig]):
     """Greedy best-first search ordered only by h(n), with replayable events."""
 
@@ -62,6 +69,8 @@ class GreedyBestFirstGridEngine(AlgorithmEngine[GreedyBestFirstGridConfig]):
         goal_row, goal_col = parse_node(self.goal)
         if self.config.heuristic == "euclidean":
             return math.hypot(goal_row - row, goal_col - col)
+        if self.config.heuristic == "chebyshev":
+            return max(abs(goal_row - row), abs(goal_col - col))
         return abs(goal_row - row) + abs(goal_col - col)
 
     def neighbours(self, node: str) -> list[str]:

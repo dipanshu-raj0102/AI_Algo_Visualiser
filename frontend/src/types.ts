@@ -5,6 +5,9 @@ export type AlgorithmEvent = {
   frontier: Array<{ node: string; g: number; h: number; f: number }>;
   explored: string[];
   path: string[];
+  state?: unknown;
+  candidate?: unknown;
+  explanation?: string | null;
   metrics: Record<string, number | string | null>;
   metadata: Record<string, unknown>;
 };
@@ -26,4 +29,10 @@ export type AlgorithmMetadata = {
   visualization_type: string;
   supports_step_execution: boolean;
   supports_comparison: boolean;
+};
+
+export type ComparisonResponse = {
+  comparison_id: string;
+  results: ExecutionResponse[];
+  summary: { algorithms: Array<Record<string, unknown>> };
 };

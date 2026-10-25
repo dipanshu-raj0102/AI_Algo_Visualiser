@@ -13,7 +13,7 @@ The first vertical slice includes:
 - Playback controls for play, pause, reset, step forward, speed selection, event timeline, frontier/closed-set inspection, and metrics.
 - Backend correctness tests for optimality, obstacles, and invalid configuration.
 
-The remaining algorithm families and persistence layers are intentionally staged behind this shared architecture rather than implemented as disconnected demos.
+The current backend registry now includes grid search, terrain search, heuristic analysis, weighted city routing, 15-puzzle, web-crawler and landmark best-first simulations, local-search landscapes/N-Queens/TSP, generic minimax/alpha-beta, Tic-Tac-Toe, Connect-4, move-ordering analysis, and simulated-annealing scheduling. Persistence/authentication and long-lived streaming remain deliberately separate deployment phases.
 
 ## Repository layout
 
@@ -54,4 +54,4 @@ cd backend && pytest
 cd frontend && npm run build
 ```
 
-See [docs/architecture/overview.md](docs/architecture/overview.md) for the extension model and the next implementation phases.
+See [docs/architecture/overview.md](docs/architecture/overview.md), [docs/api/endpoints.md](docs/api/endpoints.md), and [docs/development/adding-algorithms.md](docs/development/adding-algorithms.md) for the extension model and API.

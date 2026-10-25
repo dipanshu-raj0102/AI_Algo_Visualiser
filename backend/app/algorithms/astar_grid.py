@@ -23,8 +23,8 @@ class AStarGridConfig(BaseModel):
     @field_validator("heuristic")
     @classmethod
     def validate_heuristic(cls, value: str) -> str:
-        if value not in {"manhattan", "euclidean"}:
-            raise ValueError("heuristic must be manhattan or euclidean")
+        if value not in {"manhattan", "euclidean", "chebyshev", "zero"}:
+            raise ValueError("heuristic must be manhattan, euclidean, chebyshev, or zero")
         return value
 
     @model_validator(mode="after")
@@ -93,8 +93,12 @@ class AStarGridEngine(AlgorithmEngine[AStarGridConfig]):
     def heuristic(self, node: str) -> float:
         row, col = parse_node(node)
         goal_row, goal_col = parse_node(self.goal)
+        if self.config.heuristic == "zero":
+            return 0.0
         if self.config.heuristic == "euclidean":
             return math.hypot(goal_row - row, goal_col - col)
+        if self.config.heuristic == "chebyshev":
+            return max(abs(goal_row - row), abs(goal_col - col))
         return abs(goal_row - row) + abs(goal_col - col)
 
     def neighbours(self, node: str) -> list[str]:

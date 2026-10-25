@@ -7,5 +7,5 @@ import { VisualizerPage } from "./pages/VisualizerPage";
 import { AboutPage, ComparisonPage, DashboardPage, LearnPage } from "./pages/StaticPages";
 
 export default function App() {
-  return <BrowserRouter><Layout><Routes><Route path="/" element={<LandingPage />} /><Route path="/algorithms" element={<AlgorithmsPage />} /><Route path="/algorithms/:algorithmId" element={<AlgorithmDetailPage />} /><Route path="/visualizer/astar-grid" element={<VisualizerPage />} /><Route path="/comparison" element={<ComparisonPage />} /><Route path="/learn" element={<LearnPage />} /><Route path="/dashboard" element={<DashboardPage />} /><Route path="/about" element={<AboutPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Layout></BrowserRouter>;
+  return <BrowserRouter><Layout><Routes><Route path="/" element={<LandingPage />} /><Route path="/algorithms" element={<AlgorithmsPage />} /><Route path="/algorithms/:algorithmId" element={<AlgorithmDetailPage />} /><Route path="/visualizer/:algorithmId" element={<VisualizerPage />} /><Route path="/comparison" element={<ComparisonPage />} /><Route path="/learn" element={<LearnPage />} /><Route path="/dashboard" element={<DashboardPage />} /><Route path="/about" element={<AboutPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Layout></BrowserRouter>;
 }

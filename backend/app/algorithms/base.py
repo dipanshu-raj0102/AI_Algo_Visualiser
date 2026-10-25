@@ -20,6 +20,9 @@ class AlgorithmEvent(BaseModel):
     frontier: list[dict] = Field(default_factory=list)
     explored: list[str] = Field(default_factory=list)
     path: list[str] = Field(default_factory=list)
+    state: object | None = None
+    candidate: object | None = None
+    explanation: str | None = None
     metrics: dict[str, int | float | str | None] = Field(default_factory=dict)
     metadata: dict[str, object] = Field(default_factory=dict)
 
@@ -46,3 +49,15 @@ class AlgorithmEngine(ABC, Generic[ConfigT]):
 
     def record(self, event: AlgorithmEvent) -> None:
         self.events.append(event)
+
+    def reset(self) -> None:
+        """Reset the replayable event log before a new run."""
+        self.events = []
+
+    def get_state(self) -> AlgorithmEvent | None:
+        """Return the latest emitted state for generic consumers."""
+        return self.events[-1] if self.events else None
+
+    def get_metrics(self) -> dict[str, int | float | str | None]:
+        """Return metrics from the latest state without knowing the algorithm family."""
+        return self.events[-1].metrics if self.events else {}
