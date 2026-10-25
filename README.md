@@ -52,6 +52,9 @@ Set `VITE_API_URL` when the backend is not running on `http://localhost:8000`.
 ```bash
 cd backend && pytest
 cd frontend && npm run build
+cd frontend && npm run e2e
 ```
 
 See [docs/architecture/overview.md](docs/architecture/overview.md), [docs/api/endpoints.md](docs/api/endpoints.md), and [docs/development/adding-algorithms.md](docs/development/adding-algorithms.md) for the extension model and API.
+
+Docker assets are provided through `backend/Dockerfile`, `frontend/Dockerfile`, and `docker-compose.yml`. The local container image build requires Docker or Docker Compose to be installed.

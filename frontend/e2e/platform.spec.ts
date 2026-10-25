@@ -14,7 +14,8 @@ test("comparison workspace presents its shared-problem action", async ({ page })
 });
 
 test("visualizer exposes playback controls", async ({ page }) => {
-  await page.goto("/visualizer/astar-grid");
+  await page.goto("/");
+  await page.getByRole("link", { name: /Launch workspace/i }).click();
   await expect(page.getByRole("heading", { name: /Watch the search frontier/i })).toContainText("Watch the search frontier");
   await expect(page.getByRole("button", { name: /Run astar-grid/i })).toContainText("Run astar-grid");
 });
