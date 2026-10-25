@@ -1,0 +1,9 @@
+import { Link, useParams } from "react-router-dom";
+import { ArrowRight, Check, Code2 } from "lucide-react";
+import { SectionHeading } from "../components/SectionHeading";
+
+export function AlgorithmDetailPage() {
+  const { algorithmId } = useParams();
+  const isAStar = algorithmId === "astar-grid";
+  return <section className="page-width section page-top"><div className="detail-hero"><div><span className="eyebrow">INFORMED SEARCH · INTERMEDIATE</span><h1>{isAStar ? "A* Grid Pathfinding" : "Algorithm module"}</h1><p>{isAStar ? "A* finds a least-cost route by combining the exact cost already travelled with an admissible estimate of the remaining distance." : "This module is being added to the shared algorithm registry."}</p><Link className="button button-dark" to={isAStar ? "/visualizer/astar-grid" : "/algorithms"}>Open visualizer <ArrowRight size={16} /></Link></div><div className="formula-card"><span className="eyebrow">CORE FORMULA</span><strong>f(n) = g(n) + h(n)</strong><span>Cost so far + estimated cost to goal</span></div></div><div className="detail-grid"><div><SectionHeading eyebrow="HOW IT WORKS" title="Every choice is inspectable." body="The engine emits a state event whenever it discovers, updates, or expands a node. The workspace turns those events into a visual explanation." /><div className="check-list"><span><Check size={15} /> g(n), h(n), and f(n) are calculated by the backend.</span><span><Check size={15} /> The frontier and explored set are visible at every step.</span><span><Check size={15} /> The final route is reconstructed from parent pointers.</span></div></div><div className="code-card"><div className="code-card-head"><Code2 size={15} /> pseudocode</div><pre>{`open ← {start}\nclosed ← ∅\nwhile open is not empty:\n  current ← node with lowest f(n)\n  if current = goal: return path\n  move current to closed\n  for each neighbour of current:\n    update g, h, f and parent`}</pre></div></div></section>;
+}
