@@ -28,14 +28,18 @@ export type ComparisonProblem = {
   obstacles: string[];
   obstacle_density?: number;
   movement_model?: string;
+  cost_model?: string;
   seed?: number;
   signature?: string;
 };
 
 export type HeuristicSummary = {
   heuristic: HeuristicName;
+  heuristic_name: string;
   heuristic_formula: string;
   heuristic_description: string;
+  heuristic_assumptions: string;
+  heuristic_suitability: string;
   status: string;
   path_cost: number | null;
   path_length: number;
@@ -91,6 +95,7 @@ function parseProblem(value: unknown): ComparisonProblem {
     obstacles: Array.isArray(raw.obstacles) ? raw.obstacles.filter((item): item is string => typeof item === "string") : [],
     obstacle_density: typeof raw.obstacle_density === "number" ? raw.obstacle_density : undefined,
     movement_model: typeof raw.movement_model === "string" ? raw.movement_model : undefined,
+    cost_model: typeof raw.cost_model === "string" ? raw.cost_model : undefined,
     seed: typeof raw.seed === "number" ? raw.seed : undefined,
     signature: typeof raw.signature === "string" ? raw.signature : undefined,
   };
@@ -127,8 +132,11 @@ function parseSummary(value: unknown, heuristic: HeuristicName, events: Comparis
   const reached = asBoolean(raw.reached ?? finalMetrics.reached, events.at(-1)?.event_type === "COMPLETED");
   return {
     heuristic,
+    heuristic_name: asString(raw.heuristic_name, displayHeuristic(heuristic)),
     heuristic_formula: asString(raw.heuristic_formula, heuristic === "zero" ? "0" : heuristic),
     heuristic_description: asString(raw.heuristic_description),
+    heuristic_assumptions: asString(raw.heuristic_assumptions, "Four-way movement with unit edge costs."),
+    heuristic_suitability: asString(raw.heuristic_suitability),
     status: asString(raw.status, reached ? "completed" : "failed"),
     path_cost: typeof (raw.path_cost ?? finalMetrics.path_cost) === "number" ? Number(raw.path_cost ?? finalMetrics.path_cost) : null,
     path_length: numericMetric("path_length"),
@@ -159,6 +167,7 @@ export function parseComparisonExecution(payload: unknown): ComparisonExecution 
     const heuristic = heuristicValue as HeuristicName;
     const rawEvents = Array.isArray(raw.events) ? raw.events : Array.isArray(raw.trace) ? raw.trace : [];
     const events = rawEvents.map(parseEvent);
+    if (events.length === 0) return [];
     const problem = parseProblem(raw.problem ?? fallbackProblem);
     return [{ ...parseSummary(raw, heuristic, events), problem, events }];
   });

@@ -17,6 +17,7 @@ export type AnimationController<T> = {
   restart: () => void;
   stepForward: () => void;
   stepBackward: () => void;
+  seek: (index: number) => void;
   fastForward: () => void;
   finish: () => void;
   setSpeed: (speed: AnimationSpeed) => void;
@@ -88,6 +89,11 @@ export function useAnimationController<T>(items: readonly T[], options: Animatio
     setIndex((current) => Math.max(0, current - 1));
   }, []);
 
+  const seek = useCallback((nextIndex: number) => {
+    setIsPlaying(false);
+    setIndex(Math.min(Math.max(0, nextIndex), Math.max(0, count - 1)));
+  }, [count]);
+
   const fastForward = useCallback(() => {
     if (count === 0) return;
     setSpeedState(8);
@@ -115,8 +121,9 @@ export function useAnimationController<T>(items: readonly T[], options: Animatio
     restart,
     stepForward,
     stepBackward,
+    seek,
     fastForward,
     finish,
     setSpeed,
-  }), [count, finish, index, isPlaying, items, pause, play, restart, resume, setSpeed, speed, stepBackward, stepForward, fastForward]);
+  }), [count, finish, index, isPlaying, items, pause, play, restart, resume, seek, setSpeed, speed, stepBackward, stepForward, fastForward]);
 }

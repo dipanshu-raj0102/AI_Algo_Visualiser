@@ -8,7 +8,7 @@ export type AlgorithmEvent = {
   state?: unknown;
   candidate?: unknown;
   explanation?: string | null;
-  metrics: Record<string, number | string | null>;
+  metrics: Record<string, number | string | boolean | null>;
   metadata: Record<string, unknown>;
 };
 

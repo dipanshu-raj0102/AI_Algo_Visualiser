@@ -11,11 +11,37 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from .base import AlgorithmEngine, AlgorithmEvent, AlgorithmResult
 
 
+GRID_COST_MODEL = "unit cost for each orthogonal move"
+
 HEURISTIC_DEFINITIONS: dict[str, dict[str, str]] = {
-    "manhattan": {"formula": "|dr| + |dc|", "description": "Sum of orthogonal distance to the goal."},
-    "euclidean": {"formula": "sqrt(dr² + dc²)", "description": "Straight-line distance to the goal."},
-    "chebyshev": {"formula": "max(|dr|, |dc|)", "description": "Maximum coordinate distance to the goal."},
-    "zero": {"formula": "0", "description": "No heuristic; A* becomes Dijkstra / uniform-cost search."},
+    "manhattan": {
+        "name": "Manhattan",
+        "formula": "|dr| + |dc|",
+        "description": "Sum of orthogonal distance to the goal.",
+        "assumptions": "Four-way movement with unit edge costs.",
+        "suitability": "Matches the current four-way unit-cost grid model.",
+    },
+    "euclidean": {
+        "name": "Euclidean",
+        "formula": "sqrt(dr² + dc²)",
+        "description": "Straight-line distance to the goal.",
+        "assumptions": "Four-way movement with unit edge costs.",
+        "suitability": "Provides a geometric estimate for the current four-way grid model.",
+    },
+    "chebyshev": {
+        "name": "Chebyshev",
+        "formula": "max(|dr|, |dc|)",
+        "description": "Maximum coordinate distance to the goal.",
+        "assumptions": "Four-way movement with unit edge costs.",
+        "suitability": "Useful as a comparison estimate; its interpretation depends on the configured movement model.",
+    },
+    "zero": {
+        "name": "Zero / Dijkstra",
+        "formula": "0",
+        "description": "No heuristic; A* becomes Dijkstra / uniform-cost search.",
+        "assumptions": "Four-way movement with unit edge costs.",
+        "suitability": "A reference search with no directional estimate for the current cost model.",
+    },
 }
 
 
@@ -199,10 +225,13 @@ class AStarGridEngine(AlgorithmEngine[AStarGridConfig]):
             "seed": self.config.seed,
             "obstacle_density": self.config.obstacle_density,
             "movement_model": self.config.movement_model,
+            "cost_model": GRID_COST_MODEL,
             "heuristic": self.config.heuristic,
+            "heuristic_name": heuristic_details["name"],
             "heuristic_formula": heuristic_details["formula"],
             "heuristic_description": heuristic_details["description"],
-            "cost_model": "unit cost for each orthogonal move",
+            "heuristic_assumptions": heuristic_details["assumptions"],
+            "heuristic_suitability": heuristic_details["suitability"],
             "execution_time_unit": "milliseconds",
             "metric_formulas": {
                 "expanded": "count of nodes removed from the frontier and evaluated",

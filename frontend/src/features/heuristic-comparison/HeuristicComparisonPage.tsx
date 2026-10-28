@@ -1,6 +1,7 @@
 import { FastForward, Pause, Play, RotateCcw, SkipBack, SkipForward, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createExecution } from "../../api";
+import { StateLegend } from "../../components/StateLegend";
 import { useAnimationController, ANIMATION_SPEEDS, type AnimationSpeed } from "../../hooks/useAnimationController";
 import {
   displayHeuristic,
@@ -40,10 +41,10 @@ const FORMULA_FALLBACK: Record<HeuristicName, { formula: string; description: st
 };
 
 const COLORS: Record<HeuristicName, string> = {
-  manhattan: "#0f766e",
-  euclidean: "#2563eb",
-  chebyshev: "#9333ea",
-  zero: "#c2410c",
+  manhattan: "var(--heuristic-manhattan)",
+  euclidean: "var(--heuristic-euclidean)",
+  chebyshev: "var(--heuristic-chebyshev)",
+  zero: "var(--heuristic-zero)",
 };
 
 function formatMetric(value: number | null | undefined, suffix = ""): string {
@@ -58,16 +59,38 @@ function metricValue(event: ComparisonEvent | undefined, name: string, fallback:
 
 function comparisonInsight(runs: ComparisonRun[]): string {
   const reached = runs.filter((run) => run.reached && run.path_cost !== null);
-  if (!reached.length) return "None of the four searches reached the goal on this shared obstacle layout.";
+  if (!reached.length) return "Under four-way movement with unit edge costs, none of the selected searches reached the goal on this shared obstacle layout.";
   const bestCost = Math.min(...reached.map((run) => run.path_cost ?? Number.POSITIVE_INFINITY));
   const shortest = reached.filter((run) => run.path_cost === bestCost);
   const bestExpanded = Math.min(...shortest.map((run) => run.expanded));
   const winner = shortest.find((run) => run.expanded === bestExpanded) ?? shortest[0];
   const leastWork = reached.reduce((best, run) => run.expanded < best.expanded ? run : best, reached[0]);
+  const zeroRun = runs.find((run) => run.heuristic === "zero");
   if (winner.heuristic === leastWork.heuristic) {
-    return `${displayHeuristic(winner.heuristic)} found the shortest route (${formatMetric(winner.path_cost)} cost) while expanding the fewest cells (${formatMetric(winner.expanded)}). On this seeded grid, its estimate focused the search without sacrificing optimality.`;
+    return `Under four-way movement with unit edge costs, ${displayHeuristic(winner.heuristic)} found a shortest measured route (${formatMetric(winner.path_cost)} cost) while expanding the fewest cells (${formatMetric(winner.expanded)}). On this seeded grid, its estimate focused the search; this result describes this problem rather than a universal guarantee.${zeroRun ? ` Zero / Dijkstra expanded ${formatMetric(zeroRun.expanded)} cells as the no-heuristic reference.` : ""}`;
   }
-  return `${displayHeuristic(winner.heuristic)} and ${displayHeuristic(leastWork.heuristic)} both reached the same shortest route (${formatMetric(winner.path_cost)} cost). ${displayHeuristic(leastWork.heuristic)} expanded fewer cells (${formatMetric(leastWork.expanded)} vs ${formatMetric(winner.expanded)}), so it was the more efficient search for this particular obstacle layout.`;
+  return `Under four-way movement with unit edge costs, ${displayHeuristic(winner.heuristic)} and ${displayHeuristic(leastWork.heuristic)} reached the same shortest measured route (${formatMetric(winner.path_cost)} cost). ${displayHeuristic(leastWork.heuristic)} expanded fewer cells (${formatMetric(leastWork.expanded)} vs ${formatMetric(winner.expanded)}), so it was the more efficient search for this particular obstacle layout.${zeroRun ? ` Zero / Dijkstra provides the no-heuristic reference at ${formatMetric(zeroRun.expanded)} expanded cells.` : ""}`;
+}
+
+function expandedBarWidth(run: ComparisonRun, maximum: number): string {
+  if (maximum <= 0) return "0%";
+  return `${Math.max(4, (run.expanded / maximum) * 100)}%`;
+}
+
+function frontierPolyline(run: ComparisonRun, maximum: number): string {
+  const events = run.events;
+  if (events.length === 0) return "";
+  const lastIndex = Math.max(1, events.length - 1);
+  return events.map((event, index) => {
+    const x = (index / lastIndex) * 320;
+    const frontier = event.frontier.length;
+    const y = maximum > 0 ? 96 - (frontier / maximum) * 82 : 96;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  }).join(" ");
+}
+
+function traceFrontierMaximum(run: ComparisonRun): number {
+  return Math.max(0, ...run.events.map((event) => event.frontier.length));
 }
 
 export function ComparisonGrid({ run, event, problem }: { run: ComparisonRun; event: ComparisonEvent | undefined; problem: ComparisonProblem }) {
@@ -90,10 +113,11 @@ export function HeuristicPanel({ run, event, problem, isComplete }: { run: Compa
   const description = run.heuristic_description || FORMULA_FALLBACK[run.heuristic].description;
   const expanded = metricValue(event, "expanded", run.expanded);
   const frontier = event?.frontier.length ?? 0;
+  const status = isComplete ? (run.reached ? "Reached" : run.status === "failed" ? "No route" : "Failed") : "Running";
   return <article className="hcx-panel" style={{ ["--hcx-accent" as string]: COLORS[run.heuristic] }} aria-label={`${displayHeuristic(run.heuristic)} heuristic panel`}>
     <header className="hcx-panel-header">
       <div><span className="hcx-panel-kicker">{isComplete ? "TRACE COMPLETE" : "LIVE TRACE"}</span><h3>{displayHeuristic(run.heuristic)}</h3></div>
-      <span className={`hcx-status ${run.reached ? "reached" : "pending"}`}>{isComplete ? (run.reached ? "Reached" : "Stopped") : "Running"}</span>
+      <span className={`hcx-status ${run.reached ? "reached" : "pending"}`} aria-live="polite">{status}</span>
     </header>
     <div className="hcx-formula"><strong>{formula}</strong><span>{description}</span></div>
     <div className="hcx-grid-stage"><ComparisonGrid run={run} event={event} problem={problem} /></div>
@@ -134,8 +158,10 @@ export function HeuristicComparisonPage() {
     }
   };
 
-  const problem = execution?.problem ?? { rows: grid.rows, cols: grid.cols, start: grid.start, goal: grid.goal, obstacles: [] };
+  const problem: ComparisonProblem = execution?.problem ?? { rows: grid.rows, cols: grid.cols, start: grid.start, goal: grid.goal, obstacles: [] };
   const allComplete = runs.length > 0 && controller.isComplete;
+  const maximumExpanded = Math.max(0, ...runs.map((run) => run.expanded));
+  const maximumFrontier = Math.max(0, ...runs.map(traceFrontierMaximum));
   const updateNumber = (key: "rows" | "cols" | "seed", value: string) => setGrid((current) => ({ ...current, [key]: Math.max(0, Number(value)) }));
 
   return <main className="hcx-page page-width page-top">
@@ -162,26 +188,29 @@ export function HeuristicComparisonPage() {
     {error && <div className="hcx-error" role="alert">{error}</div>}
 
     {runs.length > 0 ? <>
-      <section className="hcx-playback" aria-label="Comparison playback controls">
-        <div className="hcx-playback-actions">
-          <button className="icon-button" onClick={controller.restart} aria-label="Restart comparison"><RotateCcw size={16} /></button>
-          <button className="icon-button" onClick={controller.stepBackward} aria-label="Step backward"><SkipBack size={16} /></button>
-          <button className="hcx-play-button" onClick={controller.isPlaying ? controller.pause : controller.resume} aria-label={controller.isPlaying ? "Pause comparison" : "Resume comparison"} disabled={allComplete}>{controller.isPlaying ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}</button>
-          <button className="icon-button" onClick={controller.stepForward} aria-label="Step forward"><SkipForward size={16} /></button>
-          <button className="icon-button" onClick={controller.fastForward} aria-label="Fast-forward comparison" title="Fast-forward (8×)"><FastForward size={16} /></button>
-          <button className="hcx-finish-button" onClick={controller.finish} disabled={allComplete}>Finish</button>
+       <section className="hcx-playback" aria-label="Comparison playback controls">
+         <div className="hcx-playback-actions">
+           <button type="button" className="icon-button" onClick={controller.restart} aria-label="Restart comparison"><RotateCcw size={16} /></button>
+           <button type="button" className="icon-button" onClick={controller.stepBackward} aria-label="Step backward" disabled={controller.index === 0}><SkipBack size={16} /></button>
+           <button type="button" className="hcx-play-button" onClick={controller.isPlaying ? controller.pause : controller.resume} aria-label={controller.isPlaying ? "Pause comparison" : "Resume comparison"} disabled={allComplete}>{controller.isPlaying ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}</button>
+           <button type="button" className="icon-button" onClick={controller.stepForward} aria-label="Step forward" disabled={allComplete}><SkipForward size={16} /></button>
+           <button type="button" className="icon-button" onClick={controller.fastForward} aria-label="Fast-forward comparison" title="Fast-forward (8×)" disabled={allComplete}><FastForward size={16} /></button>
+           <button type="button" className="hcx-finish-button" onClick={controller.finish} disabled={allComplete}>Finish</button>
         </div>
         <div className="hcx-progress-wrap"><div className="hcx-progress" aria-label={`Comparison progress ${Math.round(controller.progress)} percent`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(controller.progress)}><span style={{ width: `${controller.progress}%` }} /></div><span className="mono">{controller.count ? `${controller.index + 1} / ${controller.count}` : "0 / 0"}</span></div>
         <label className="hcx-speed">Speed<select aria-label="Playback speed" value={controller.speed} onChange={(event) => controller.setSpeed(Number(event.target.value) as AnimationSpeed)}>{ANIMATION_SPEEDS.map((speed) => <option key={speed} value={speed}>{speed}×</option>)}</select></label>
       </section>
 
-      <section className="hcx-shared-problem"><div><span className="hcx-section-label">SHARED PROBLEM</span><strong>{problem.rows} × {problem.cols} grid</strong><span>Start {problem.start} · Goal {problem.goal} · {problem.obstacles.length} obstacles · seed {problem.seed ?? grid.seed}</span></div><span className="hcx-signature mono">{problem.signature ? `ID ${problem.signature}` : "4-way movement"}</span></section>
+       <section className="hcx-shared-problem"><div><span className="hcx-section-label">SHARED PROBLEM</span><strong>{problem.rows} × {problem.cols} grid</strong><span>Start {problem.start} · Goal {problem.goal} · {problem.obstacles.length} obstacles · seed {problem.seed ?? grid.seed}</span><small className="mono">{problem.movement_model ?? "4-way"} · {problem.cost_model ?? "unit cost for each orthogonal move"}</small></div><span className="hcx-signature mono">{problem.signature ? `ID ${problem.signature}` : "4-way movement"}</span></section>
+       <StateLegend className="hcx-state-legend" />
 
       <section className="hcx-panel-grid">{runs.map((run) => <HeuristicPanel key={run.heuristic} run={run} event={eventAt(run, controller.index)} problem={problem} isComplete={controller.index >= run.events.length - 1} />)}</section>
 
-      <section className="hcx-insight"><div><span className="hcx-section-label">DETERMINISTIC READOUT</span><h2>What changed when the estimate changed?</h2><p>{comparisonInsight(runs)}</p></div><div className="hcx-insight-stat"><span>Current shared step</span><strong>{controller.index + 1}</strong><small>{allComplete ? "All traces complete" : "Shorter traces stay pinned while longer traces continue"}</small></div></section>
+       <section className="hcx-insight"><div><span className="hcx-section-label">DETERMINISTIC READOUT</span><h2>What changed when the estimate changed?</h2><p>{comparisonInsight(runs)}</p></div><div className="hcx-insight-stat" aria-live="polite"><span>Current shared step</span><strong>{controller.index + 1}</strong><small>{allComplete ? "All traces complete" : "Shorter traces stay pinned while longer traces continue"}</small></div></section>
 
-      <section className="hcx-analysis"><div className="hcx-section-heading"><span className="hcx-section-label">FINAL METRICS</span><h2>Compare the work behind each route.</h2><p>Metrics come directly from each backend trace, so route quality and search effort remain visible together.</p></div><div className="hcx-table-wrap"><table><caption className="sr-only">Final heuristic comparison metrics</caption><thead><tr><th scope="col">Heuristic</th><th scope="col">Formula</th><th scope="col">Expanded</th><th scope="col">Discovered</th><th scope="col">Max frontier</th><th scope="col">Path cost</th><th scope="col">Runtime</th><th scope="col">Status</th></tr></thead><tbody>{runs.map((run) => <tr key={run.heuristic}><th scope="row"><span className="hcx-dot" style={{ background: COLORS[run.heuristic] }} />{displayHeuristic(run.heuristic)}</th><td className="mono">{run.heuristic_formula || FORMULA_FALLBACK[run.heuristic].formula}</td><td>{formatMetric(run.expanded)}</td><td>{formatMetric(run.discovered)}</td><td>{formatMetric(run.max_frontier)}</td><td>{formatMetric(run.path_cost)}</td><td>{formatMetric(run.execution_time, " ms")}</td><td><span className={run.reached ? "hcx-table-status reached" : "hcx-table-status"}>{run.reached ? "Reached" : "No route"}</span></td></tr>)}</tbody></table></div></section>
+       <section className="hcx-analytics" aria-labelledby="analytics-heading"><div className="hcx-section-heading"><span className="hcx-section-label">MEASURED ANALYTICS</span><h2 id="analytics-heading">See the search effort, not just the route.</h2><p>Bars use each run's final expanded-node metric. Lines show the frontier size recorded at every real replay event.</p></div><div className="hcx-analytics-grid"><article className="hcx-chart-card"><div className="hcx-chart-card-heading"><div><span className="hcx-section-label">EXPANDED NODES</span><h3>Work completed</h3></div><span className="mono">max {maximumExpanded}</span></div><div className="hcx-bars" role="list" aria-label="Expanded nodes by heuristic">{runs.map((run) => <div className="hcx-bar-row" key={run.heuristic} role="listitem"><span>{displayHeuristic(run.heuristic)}</span><div className="hcx-bar-track"><span className="hcx-bar" style={{ width: expandedBarWidth(run, maximumExpanded), background: COLORS[run.heuristic] }} /></div><b className="mono">{formatMetric(run.expanded)}</b></div>)}</div></article><article className="hcx-chart-card"><div className="hcx-chart-card-heading"><div><span className="hcx-section-label">FRONTIER PROGRESSION</span><h3>Pending work over replay</h3></div><span className="mono">max {maximumFrontier}</span></div><svg className="hcx-line-chart" viewBox="0 0 320 100" role="img" aria-label="Frontier size progression for each heuristic"><line x1="0" y1="96" x2="320" y2="96" /><line x1="0" y1="14" x2="0" y2="96" />{runs.map((run) => <polyline key={run.heuristic} points={frontierPolyline(run, maximumFrontier)} fill="none" stroke={COLORS[run.heuristic]} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label={`${displayHeuristic(run.heuristic)} frontier progression`} />)}</svg><div className="hcx-chart-legend">{runs.map((run) => <span key={run.heuristic}><i className="hcx-dot" style={{ background: COLORS[run.heuristic] }} />{displayHeuristic(run.heuristic)}</span>)}</div></article></div></section>
+
+       <section className="hcx-analysis"><div className="hcx-section-heading"><span className="hcx-section-label">FINAL METRICS</span><h2>Compare the work behind each route.</h2><p>Metrics come directly from each backend trace, so route quality and search effort remain visible together. Runtime is measured wall-clock time and can vary between executions.</p></div><div className="hcx-table-wrap"><table><caption className="sr-only">Final heuristic comparison metrics</caption><thead><tr><th scope="col">Heuristic</th><th scope="col">Formula</th><th scope="col">Expanded</th><th scope="col">Discovered</th><th scope="col">Max frontier</th><th scope="col">Explored</th><th scope="col">Events</th><th scope="col">Path cost</th><th scope="col">Runtime</th><th scope="col">Status</th></tr></thead><tbody>{runs.map((run) => <tr key={run.heuristic}><th scope="row"><span className="hcx-dot" style={{ background: COLORS[run.heuristic] }} />{displayHeuristic(run.heuristic)}</th><td className="mono">{run.heuristic_formula || FORMULA_FALLBACK[run.heuristic].formula}</td><td>{formatMetric(run.expanded)}</td><td>{formatMetric(run.discovered)}</td><td>{formatMetric(run.max_frontier)}</td><td>{formatMetric(run.explored_cells)}</td><td>{formatMetric(run.event_count)}</td><td>{formatMetric(run.path_cost)}</td><td>{formatMetric(run.execution_time, " ms")}</td><td><span className={run.reached ? "hcx-table-status reached" : "hcx-table-status"}>{run.reached ? "Reached" : "No route"}</span></td></tr>)}</tbody></table></div></section>
     </> : <section className="hcx-empty"><span className="hcx-section-label">READY TO EXPLORE</span><h2>Run one seeded problem through four real A* traces.</h2><p>The panels, formulas, timeline, and metrics will populate from the backend comparison engine. No prerecorded animation is used.</p></section>}
   </main>;
 }

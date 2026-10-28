@@ -6,7 +6,7 @@ from typing import Literal, cast
 
 from pydantic import BaseModel, Field, field_validator
 
-from .astar_grid import HEURISTIC_DEFINITIONS, AStarGridConfig, AStarGridEngine, generate_obstacles
+from .astar_grid import GRID_COST_MODEL, HEURISTIC_DEFINITIONS, AStarGridConfig, AStarGridEngine, generate_obstacles
 from .base import AlgorithmEngine, AlgorithmEvent, AlgorithmResult
 
 
@@ -29,8 +29,11 @@ class HeuristicComparisonConfig(BaseModel):
 
 class HeuristicComparisonSummary(BaseModel):
     heuristic: HeuristicName
+    heuristic_name: str
     heuristic_formula: str
     heuristic_description: str
+    heuristic_assumptions: str
+    heuristic_suitability: str
     status: str
     path_cost: int | float | None
     path_length: int
@@ -67,6 +70,7 @@ class HeuristicComparisonEngine(AlgorithmEngine[HeuristicComparisonConfig]):
             "obstacles": sorted(grid.obstacles),
             "obstacle_density": grid.obstacle_density,
             "movement_model": grid.movement_model,
+            "cost_model": GRID_COST_MODEL,
             "seed": grid.seed,
         }
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -114,8 +118,11 @@ class HeuristicComparisonEngine(AlgorithmEngine[HeuristicComparisonConfig]):
             steps_value = final.metrics.get("steps", len(result.events))
             summary = HeuristicComparisonSummary(
                 heuristic=heuristic,
+                heuristic_name=HEURISTIC_DEFINITIONS[heuristic]["name"],
                 heuristic_formula=HEURISTIC_DEFINITIONS[heuristic]["formula"],
                 heuristic_description=HEURISTIC_DEFINITIONS[heuristic]["description"],
+                heuristic_assumptions=HEURISTIC_DEFINITIONS[heuristic]["assumptions"],
+                heuristic_suitability=HEURISTIC_DEFINITIONS[heuristic]["suitability"],
                 status=result.status,
                 path_cost=path_cost,
                 path_length=len(final.path),

@@ -12,11 +12,11 @@ export function GridVisualizer({ event }: { event?: AlgorithmEvent }) {
   const goal = (event?.metadata.goal as string | undefined) ?? "12,20";
   const current = event?.current_node;
 
-  return <div className="grid-visualizer" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }} aria-label="A star grid visualization">
+  return <div className="grid-visualizer" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }} role="grid" aria-label={`Algorithm search grid at step ${event?.iteration ?? 0}`}>
     {Array.from({ length: rows * cols }, (_, index) => {
       const node = `${Math.floor(index / cols)},${index % cols}`;
       const state = node === start ? "start" : node === goal ? "goal" : node === current ? "current" : path.has(node) ? "path" : obstacles.has(node) ? "obstacle" : frontier.has(node) ? "frontier" : explored.has(node) ? "explored" : "";
-      return <div key={node} className={`grid-cell ${state}`} title={`${node}${state ? ` · ${state}` : ""}`} />;
+      return <div key={node} className={`grid-cell ${state}`} role="gridcell" aria-label={`${node}${state ? `, ${state}` : " empty"}`} title={`${node}${state ? ` · ${state}` : ""}`} />;
     })}
   </div>;
 }
